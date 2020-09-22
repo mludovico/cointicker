@@ -1,6 +1,9 @@
+import 'package:bitcoin_ticker/widgets/android_dropdown.dart';
+import 'package:bitcoin_ticker/widgets/ios_picker.dart';
+import 'package:bitcoin_ticker/widgets/rate_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'coin_data.dart';
+import 'package:bitcoin_ticker/coin_data.dart';
 import 'dart:io' show Platform;
 
 class PriceScreen extends StatefulWidget {
@@ -9,51 +12,37 @@ class PriceScreen extends StatefulWidget {
 }
 
 class _PriceScreenState extends State<PriceScreen> {
+
   String selectedCurrency = 'USD';
+  Map rates = {};
+  Map iconData = {};
+  CoinData coinData;
 
-  DropdownButton<String> androidDropdown() {
-    List<DropdownMenuItem<String>> dropdownItems = [];
-    for (String currency in currenciesList) {
-      var newItem = DropdownMenuItem(
-        child: Text(currency),
-        value: currency,
-      );
-      dropdownItems.add(newItem);
-    }
-
-    return DropdownButton<String>(
-      value: selectedCurrency,
-      items: dropdownItems,
-      onChanged: (value) {
-        setState(() {
-          selectedCurrency = value;
+  //TO-DO: Create a method here called getData() to get the coin data from coin_data.dart
+  void getData() async {
+    var data = await coinData.getCoinData();
+    if (data != null) {
+      setState(() {
+        //print('data = $data');
+        rates = data..forEach((key, value) {
+          value.retainWhere((item)=>currenciesList.contains(item['asset_id_quote']));
         });
-      },
-    );
-  }
-
-  CupertinoPicker iOSPicker() {
-    List<Text> pickerItems = [];
-    for (String currency in currenciesList) {
-      pickerItems.add(Text(currency));
+        //print('rates = $rates');
+      });
     }
-
-    return CupertinoPicker(
-      backgroundColor: Colors.lightBlue,
-      itemExtent: 32.0,
-      onSelectedItemChanged: (selectedIndex) {
-        print(selectedIndex);
-      },
-      children: pickerItems,
-    );
   }
 
-  //TODO: Create a method here called getData() to get the coin data from coin_data.dart
+  void getIconData() async {
+    iconData = await coinData.getIconData();
+  }
 
   @override
   void initState() {
     super.initState();
-    //TODO: Call getData() when the screen loads up.
+    //TO-DO: Call getData() when the screen loads up.
+    coinData = CoinData();
+    getData();
+    getIconData();
   }
 
   @override
@@ -61,42 +50,69 @@ class _PriceScreenState extends State<PriceScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('🤑 Coin Ticker'),
+        centerTitle: true,
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Padding(
-            padding: EdgeInsets.fromLTRB(18.0, 18.0, 18.0, 0),
-            child: Card(
-              color: Colors.lightBlueAccent,
-              elevation: 5.0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 15.0, horizontal: 28.0),
-                child: Text(
-                  //TODO: Update the Text Widget with the live bitcoin data here.
-                  '1 BTC = ? USD',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20.0,
-                    color: Colors.white,
-                  ),
+        children: rates == null || rates.isEmpty
+          ?
+        [
+          Expanded(
+            child: Center(
+              //padding: EdgeInsets.only(top: 80),
+              child: Platform.isIOS
+                ?
+              CupertinoActivityIndicator()
+                :
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(
+                  Theme.of(context).primaryColor,
                 ),
               ),
             ),
-          ),
-          Container(
-            height: 150.0,
-            alignment: Alignment.center,
-            padding: EdgeInsets.only(bottom: 30.0),
-            color: Colors.lightBlue,
-            child: Platform.isIOS ? iOSPicker() : androidDropdown(),
-          ),
-        ],
+          )
+        ]
+          :
+        cryptoList.map<Widget>((crypto){
+            return RateCard(
+              currency: selectedCurrency,
+              coin: crypto,
+              rate: rates[crypto].firstWhere((element) => element['asset_id_quote'] == selectedCurrency)['rate'],
+              image: iconData[crypto],
+            );
+          }).toList()..add(
+            Container(
+              height: 150.0,
+              alignment: Alignment.center,
+              padding: EdgeInsets.only(bottom: 30.0),
+              color: Colors.lightBlue,
+              child: Platform.isIOS
+                ?
+              IosPicker(
+                currenciesList: currenciesList,
+                onChange: (index){
+                  setState(() {
+                    selectedCurrency = currenciesList[index];
+                  });
+                },
+              )
+                :
+              AndroidDropDown(
+              currenciesList: currenciesList,
+              selectedCurrency: selectedCurrency,
+              onChange: (value){
+                setState(() {
+                  selectedCurrency = value;
+                });
+                print(selectedCurrency);
+              },
+            ),
+            ),
+          )
       ),
     );
   }
 }
+
+
